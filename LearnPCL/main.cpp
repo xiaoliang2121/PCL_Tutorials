@@ -1,33 +1,38 @@
 ﻿#include <iostream>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
-#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 
 int main (int argc, char** argv)
 {
-    pcl::PCLPointCloud2::Ptr cloud (new pcl::PCLPointCloud2 ());
-    pcl::PCLPointCloud2::Ptr cloud_filtered (new pcl::PCLPointCloud2 ());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(
+                new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(
+                new pcl::PointCloud<pcl::PointXYZ>);
 
-    // Fill in the cloud data
     pcl::PCDReader reader;
-    // Replace the path below with the path where you saved your file
-    reader.read ("../data/table_scene_lms400.pcd", *cloud); // Remember to download the file first!
+    reader.read<pcl::PointXYZ>("../data/table_scene_lms400.pcd",*cloud);
 
-    std::cerr << "PointCloud before filtering: " << cloud->width * cloud->height
-       << " data points (" << pcl::getFieldsList (*cloud) << ").";
+    std::cerr << "Cloud before filtering: " << std::endl;
+    std::cerr << *cloud << std::endl;
 
-    // Create the filtering object
-    pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-    sor.setInputCloud (cloud);
-    sor.setLeafSize (0.01f, 0.01f, 0.01f);
-    sor.filter (*cloud_filtered);
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+    sor.setInputCloud(cloud);
+    sor.setMeanK(50);
+    sor.setStddevMulThresh(1.0);
+    sor.filter(*cloud_filtered);
 
-    std::cerr << "PointCloud after filtering: " << cloud_filtered->width * cloud_filtered->height
-       << " data points (" << pcl::getFieldsList (*cloud_filtered) << ").";
+    std::cerr << "Cloud after filtering: " << std::endl;
+    std::cerr << *cloud_filtered << std::endl;
 
     pcl::PCDWriter writer;
-    writer.write ("../data/table_scene_lms400_downsampled.pcd", *cloud_filtered,
-         Eigen::Vector4f::Zero (), Eigen::Quaternionf::Identity (), false);
+    writer.write<pcl::PointXYZ>("../data/table_scene_lms400_inliers.pcd",
+                                *cloud_filtered,false);
+
+    sor.setNegative(true);
+    sor.filter(*cloud_filtered);
+    writer.write<pcl::PointXYZ>("../data/table_scene_lms400_outliers.pcd",
+                                *cloud_filtered,false);
 
     return 0;
 }
