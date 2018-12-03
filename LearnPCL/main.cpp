@@ -1,93 +1,72 @@
 ﻿#include <iostream>
-#include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
-#include <pcl/ModelCoefficients.h>
-#include <pcl/sample_consensus/method_types.h>
-#include <pcl/sample_consensus/model_types.h>
-#include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/filters/extract_indices.h>
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/filters/conditional_removal.h>
 
 int main (int argc, char** argv)
 {
-    pcl::PCLPointCloud2::Ptr
-            cloud_blob(new pcl::PCLPointCloud2),
-            cloud_filtered_blob(new pcl::PCLPointCloud2);
+    if (argc != 2)
+    {
+        std::cerr << "please specify command line arg '-r' or '-c'" << std::endl;
+        exit(0);
+    }
     pcl::PointCloud<pcl::PointXYZ>::Ptr
-            cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>),
-            cloud_p(new pcl::PointCloud<pcl::PointXYZ>),
-            cloud_f(new pcl::PointCloud<pcl::PointXYZ>);
+            cloud (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr
+            cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
 
     // Fill in the cloud data
-    pcl::PCDReader reader;
-    reader.read("../data/table_scene_lms400.pcd",*cloud_blob);
+    cloud->width  = 5;
+    cloud->height = 1;
+    cloud->points.resize (cloud->width * cloud->height);
 
-    std::cerr << "PointCloud before filtering: " << cloud_blob->width * cloud_blob->height
-              << " data points." << std::endl;
-
-    // Create the filtering object: downsample the dataset using a leaf size of 1cm
-    pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-    sor.setInputCloud(cloud_blob);
-    sor.setLeafSize(0.01f,0.01f,0.01f);
-    sor.filter(*cloud_filtered_blob);
-
-    // Convert to the templated PointCloud
-    pcl::fromPCLPointCloud2(*cloud_filtered_blob,*cloud_filtered);
-    std::cerr << "PointCloud after filtering: " << cloud_filtered->width * cloud_filtered->height
-              << " data points." << std::endl;
-
-    // Write the downsampled version to disk
-    pcl::PCDWriter writer;
-    writer.write<pcl::PointXYZ> ("table_scene_lms400_downsampled.pcd",
-                               *cloud_filtered, false);
-
-    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients());
-    pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-
-    // Create the segmentation object
-    pcl::SACSegmentation<pcl::PointXYZ> seg;
-    seg.setOptimizeCoefficients(true);
-    seg.setModelType(pcl::SACMODEL_PLANE);
-    seg.setMethodType(pcl::SAC_RANSAC);
-    seg.setMaxIterations(1000);
-    seg.setDistanceThreshold(0.01);
-
-    // Create the filtering object
-    pcl::ExtractIndices<pcl::PointXYZ> extract;
-    int i = 0, nr_points = (int)cloud_filtered->points.size();
-    // While 30% of the original cloud is still there
-    while(cloud_filtered->points.size() > 0.3*nr_points)
+    for (size_t i = 0; i < cloud->points.size (); ++i)
     {
-        // Segment the largest planar component from the remaining cloud
-        seg.setInputCloud(cloud_filtered);
-        seg.segment(*inliers, *coefficients);
-        if(inliers->indices.size() == 0)
-        {
-            std::cerr << "Could not estimate a planar model for the given dataset." << std::endl;
-            break;
-        }
-
-        // Extract the inliers
-        extract.setInputCloud(cloud_filtered);
-        extract.setIndices(inliers);
-        extract.setNegative(false);
-        extract.filter(*cloud_p);
-        std::cerr << "PointCloud representing the planar component: "
-                  << cloud_p->width * cloud_p->height << " data points."
-                  << std::endl;
-
-        std::stringstream ss;
-        ss<<"table_scene_lms400_plane_"<<i<<".pcd";
-        writer.write<pcl::PointXYZ>(ss.str(),*cloud_p,false);
-
-        // Create the filtering object
-        extract.setNegative(true);
-        extract.filter(*cloud_f);
-        cloud_filtered.swap(cloud_f);
-
-        i++;
+        cloud->points[i].x = rand () / (RAND_MAX + 1.0f);
+        cloud->points[i].y = rand () / (RAND_MAX + 1.0f);
+        cloud->points[i].z = rand () / (RAND_MAX + 1.0f);
     }
 
+    if (strcmp(argv[1], "-r") == 0){
+        pcl::RadiusOutlierRemoval<pcl::PointXYZ> outrem;
+        // build the filter
+        outrem.setInputCloud(cloud);
+        outrem.setRadiusSearch(0.7);
+        outrem.setMinNeighborsInRadius (2);
+        // apply filter
+        outrem.filter (*cloud_filtered);
+    }
+    else if (strcmp(argv[1], "-c") == 0){
+        // build the condition
+        pcl::ConditionAnd<pcl::PointXYZ>::Ptr range_cond (new
+          pcl::ConditionAnd<pcl::PointXYZ> ());
+        range_cond->addComparison (pcl::FieldComparison<pcl::PointXYZ>::ConstPtr (new
+          pcl::FieldComparison<pcl::PointXYZ> ("z", pcl::ComparisonOps::GT, 0.0)));
+        range_cond->addComparison (pcl::FieldComparison<pcl::PointXYZ>::ConstPtr (new
+          pcl::FieldComparison<pcl::PointXYZ> ("z", pcl::ComparisonOps::LT, 0.8)));
+        // build the filter
+        pcl::ConditionalRemoval<pcl::PointXYZ> condrem;
+        condrem.setCondition (range_cond);
+        condrem.setInputCloud (cloud);
+        condrem.setKeepOrganized(true);
+        // apply filter
+        condrem.filter (*cloud_filtered);
+    }
+    else{
+        std::cerr << "please specify command line arg '-r' or '-c'" << std::endl;
+        exit(0);
+    }
+    std::cerr << "Cloud before filtering: " << std::endl;
+    for (size_t i = 0; i < cloud->points.size (); ++i)
+        std::cerr << "    " << cloud->points[i].x << " "
+                            << cloud->points[i].y << " "
+                            << cloud->points[i].z << std::endl;
 
+    // display pointcloud after filtering
+    std::cerr << "Cloud after filtering: " << std::endl;
+    for (size_t i = 0; i < cloud_filtered->points.size (); ++i)
+        std::cerr << "    " << cloud_filtered->points[i].x << " "
+                            << cloud_filtered->points[i].y << " "
+                            << cloud_filtered->points[i].z << std::endl;
     return 0;
 }
