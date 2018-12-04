@@ -1,14 +1,17 @@
 ﻿#include <iostream>
 #include <pcl/point_types.h>
-#include <pcl/filters/passthrough.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <vector>
+#include <ctime>
 
 int main (int argc, char** argv)
 {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
+    srand(time(NULL));
+    pcl::PointCloud<pcl::PointXYZ>::Ptr
+            cloud (new pcl::PointCloud<pcl::PointXYZ>);
 
     // Fill in the cloud data
-    cloud->width  = 5;
+    cloud->width  = 1000;
     cloud->height = 1;
     cloud->points.resize (cloud->width * cloud->height);
 
@@ -19,25 +22,56 @@ int main (int argc, char** argv)
         cloud->points[i].z = 1024 * rand () / (RAND_MAX + 1.0f);
     }
 
-    std::cout << "Cloud before filtering: " << std::endl;
-    for (size_t i = 0; i < cloud->points.size (); ++i)
-        std::cout << "    " << cloud->points[i].x << " "
-                        << cloud->points[i].y << " "
-                        << cloud->points[i].z << std::endl;
+    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+    kdtree.setInputCloud(cloud);
+    pcl::PointXYZ searchPoint;
+    searchPoint.x = 1024 * rand () / (RAND_MAX + 1.0f);
+    searchPoint.y = 1024 * rand () / (RAND_MAX + 1.0f);
+    searchPoint.z = 1024 * rand () / (RAND_MAX + 1.0f);
 
-    // Create the filtering object
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud (cloud);
-    pass.setFilterFieldName ("z");
-    pass.setFilterLimits (0.0, 800.0);
-//    pass.setFilterLimitsNegative (true);
-    pass.filter (*cloud_filtered);
+    // k近邻搜索
+    int K = 10;
+    std::vector<int> pointIdxNKNSearch(K);
+    std::vector<float> pointNKNSquaredDistance(K);
+    std::cout<<"K nearest neighbor search at ("<<searchPoint.x
+            <<" "<<searchPoint.y
+           <<" "<<searchPoint.z
+          <<") with K="<< K <<std::endl;
 
-    std::cout << "Cloud after filtering: " << std::endl;
-    for (size_t i = 0; i < cloud_filtered->points.size (); ++i)
-    std::cout << "    " << cloud_filtered->points[i].x << " "
-                        << cloud_filtered->points[i].y << " "
-                        << cloud_filtered->points[i].z << std::endl;
+    if(kdtree.nearestKSearch(searchPoint,K,pointIdxNKNSearch,
+                             pointNKNSquaredDistance) > 0)
+    {
+        for(size_t i=0; i<pointIdxNKNSearch.size(); i++)
+        {
+            std::cout<<"    "<<   cloud->points[ pointIdxNKNSearch[i] ].x
+                    <<" "<< cloud->points[pointIdxNKNSearch[i] ].y
+                   <<" "<< cloud->points[pointIdxNKNSearch[i] ].z
+                  <<" (squared distance: "<<pointNKNSquaredDistance[i] <<")"
+                 <<std::endl;
+        }
+    }
 
-    return 0;
+    // 在半径r内搜索近邻
+    std::vector<int> pointIdxRadiusSearch;
+    std::vector<float> pointRadiusSquaredDistance;
+    float radius = 256.0f*rand()/(RAND_MAX + 1.0f);
+    std::cout<<"Neighbors within radius search at ("<<searchPoint.x
+            <<" "<<searchPoint.y
+           <<" "<<searchPoint.z
+          <<") with radius="<< radius <<std::endl;
+
+    if(kdtree.radiusSearch(searchPoint,radius,pointIdxRadiusSearch,
+                           pointRadiusSquaredDistance) > 0)
+    {
+        for(size_t i=0; i<pointIdxRadiusSearch.size(); i++)
+        {
+            std::cout<<"    "<<   cloud->points[ pointIdxRadiusSearch[i] ].x
+                    <<" "<< cloud->points[pointIdxRadiusSearch[i] ].y
+                   <<" "<< cloud->points[pointIdxRadiusSearch[i] ].z
+                  <<" (squared distance: "<<pointRadiusSquaredDistance[i] <<")"
+                 <<std::endl;
+        }
+    }
+
+    return (0);
 }
