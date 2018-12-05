@@ -1,43 +1,95 @@
 ﻿#include <iostream>
+#include <vector>
+#include <ctime>
+
 #include <pcl/point_types.h>
-#include <pcl/filters/passthrough.h>
+#include <pcl/octree/octree.h>
 
 int main (int argc, char** argv)
 {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
+    srand((unsigned int)time(NULL));
 
-    // Fill in the cloud data
-    cloud->width  = 5;
-    cloud->height = 1;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr
+            cloud(new pcl::PointCloud<pcl::PointXYZ>);
+
+    // 创建点云数据
+    cloud->width =1000;
+    cloud->height =1;
     cloud->points.resize (cloud->width * cloud->height);
-
-    for (size_t i = 0; i < cloud->points.size (); ++i)
+    for (size_t i=0; i< cloud->points.size (); ++i)
     {
-        cloud->points[i].x = 1024 * rand () / (RAND_MAX + 1.0f);
-        cloud->points[i].y = 1024 * rand () / (RAND_MAX + 1.0f);
-        cloud->points[i].z = 1024 * rand () / (RAND_MAX + 1.0f);
+        cloud->points[i].x =1024.0f* rand () / (RAND_MAX +1.0f);
+        cloud->points[i].y =1024.0f* rand () / (RAND_MAX +1.0f);
+        cloud->points[i].z =1024.0f* rand () / (RAND_MAX +1.0f);
     }
 
-    std::cout << "Cloud before filtering: " << std::endl;
-    for (size_t i = 0; i < cloud->points.size (); ++i)
-        std::cout << "    " << cloud->points[i].x << " "
-                        << cloud->points[i].y << " "
-                        << cloud->points[i].z << std::endl;
+    float resolution = 128.0f;
+    pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree(resolution);
+    octree.setInputCloud(cloud);
+    octree.addPointsFromInputCloud();
 
-    // Create the filtering object
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud (cloud);
-    pass.setFilterFieldName ("z");
-    pass.setFilterLimits (0.0, 800.0);
-//    pass.setFilterLimitsNegative (true);
-    pass.filter (*cloud_filtered);
+    pcl::PointXYZ searchPoint;
+    searchPoint.x = 1024.0f* rand () / (RAND_MAX +1.0f);
+    searchPoint.y = 1024.0f* rand () / (RAND_MAX +1.0f);
+    searchPoint.z = 1024.0f* rand () / (RAND_MAX +1.0f);
 
-    std::cout << "Cloud after filtering: " << std::endl;
-    for (size_t i = 0; i < cloud_filtered->points.size (); ++i)
-    std::cout << "    " << cloud_filtered->points[i].x << " "
-                        << cloud_filtered->points[i].y << " "
-                        << cloud_filtered->points[i].z << std::endl;
+    // 体素内近邻搜索
+    std::vector<int> pointIdxVec;
+    if(octree.voxelSearch(searchPoint,pointIdxVec))
+    {
+        std::cout<<"Neighbors within voxel search at ("
+                <<searchPoint.x
+               <<" "<<searchPoint.y
+              <<" "<<searchPoint.z<<")"
+             <<std::endl;
 
+        for (size_t i=0; i<pointIdxVec.size (); ++i)
+            std::cout<<"    "
+                    << cloud->points[pointIdxVec[i]].x
+                    <<" "<< cloud->points[pointIdxVec[i]].y
+                   <<" "<< cloud->points[pointIdxVec[i]].z
+                  <<std::endl;
+    }
+
+    //K近邻搜索
+    int K = 10;
+    std::vector<int> pointIdxNKNSearch;
+    std::vector<float> pointNKNSquaredDistance;
+    std::cout<<"K nearest neighbor search at ("
+            <<searchPoint.x
+           <<" "<<searchPoint.y
+          <<" "<<searchPoint.z<<") with K="<<K
+         <<std::endl;
+
+    if(octree.nearestKSearch(searchPoint,K,pointIdxNKNSearch,
+                             pointNKNSquaredDistance) > 0)
+    {
+        for (size_t i=0; i<pointIdxNKNSearch.size (); ++i)
+            std::cout<<"    "
+                    <<   cloud->points[ pointIdxNKNSearch[i] ].x
+                      <<" "<< cloud->points[pointIdxNKNSearch[i] ].y
+                     <<" "<< cloud->points[pointIdxNKNSearch[i] ].z
+                    <<" (squared distance: "<<pointNKNSquaredDistance[i]
+                      <<")"<<std::endl;
+    }
+
+    //半径内近邻搜索
+    std::vector<int>pointIdxRadiusSearch;
+    std::vector<float>pointRadiusSquaredDistance;
+    float radius =256.0f* rand () / (RAND_MAX +1.0f);
+    std::cout<<"Neighbors within radius search at ("<<searchPoint.x
+                    <<" "<<searchPoint.y
+                   <<" "<<searchPoint.z
+                  <<") with radius="<< radius <<std::endl;
+    if(octree.radiusSearch(searchPoint,radius,pointIdxRadiusSearch,
+                           pointRadiusSquaredDistance) > 0)
+    {
+        for (size_t i=0; i<pointIdxRadiusSearch.size (); ++i)
+            std::cout<<"    "<<   cloud->points[ pointIdxRadiusSearch[i] ].x
+                    <<" "<< cloud->points[pointIdxRadiusSearch[i] ].y
+                   <<" "<< cloud->points[pointIdxRadiusSearch[i] ].z
+                  <<" (squared distance: "<<pointRadiusSquaredDistance[i] <<")"
+                 <<std::endl;
+    }
     return 0;
 }
