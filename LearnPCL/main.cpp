@@ -1,43 +1,51 @@
-﻿#include <iostream>
-#include <pcl/point_types.h>
-#include <pcl/filters/passthrough.h>
+﻿#include <pcl/visualization/cloud_viewer.h>
+#include <iostream>
+#include <pcl/io/io.h>
+#include <pcl/io/pcd_io.h>
 
-int main (int argc, char** argv)
+int user_data;
+void
+viewerOneOff (pcl::visualization::PCLVisualizer& viewer)
 {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
+    viewer.setBackgroundColor (1.0, 0.5, 1.0);
+    pcl::PointXYZ o;
+    o.x = 1.0;
+    o.y = 0;
+    o.z = 0;
+    viewer.addSphere (o, 0.25, "sphere", 0);
+    std::cout << "i only run once" << std::endl;
 
-    // Fill in the cloud data
-    cloud->width  = 5;
-    cloud->height = 1;
-    cloud->points.resize (cloud->width * cloud->height);
+}
 
-    for (size_t i = 0; i < cloud->points.size (); ++i)
+void
+viewerPsycho (pcl::visualization::PCLVisualizer& viewer)
+{
+    static unsigned count = 0;
+    std::stringstream ss;
+    ss << "Once per viewer loop: " << count++;
+    viewer.removeShape ("text", 0);
+    viewer.addText (ss.str(), 200, 300, "text", 0);
+    //FIXME: possible race condition here:
+    user_data++;
+}
+
+int
+main ()
+{
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr
+            cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::io::loadPCDFile ("../data/maize.pcd", *cloud);
+    pcl::visualization::CloudViewer viewer("Cloud Viewer");
+    //showCloud函数是同步的，在此处等待直到渲染显示为止
+    viewer.showCloud(cloud);
+    //该注册函数在可视化时只调用一次
+    viewer.runOnVisualizationThreadOnce (viewerOneOff);
+    //该注册函数在渲染输出时每次都调用
+    viewer.runOnVisualizationThread (viewerPsycho);
+    while (!viewer.wasStopped ())
     {
-        cloud->points[i].x = 1024 * rand () / (RAND_MAX + 1.0f);
-        cloud->points[i].y = 1024 * rand () / (RAND_MAX + 1.0f);
-        cloud->points[i].z = 1024 * rand () / (RAND_MAX + 1.0f);
+    //在此处可以添加其他处理
+    user_data++;
     }
-
-    std::cout << "Cloud before filtering: " << std::endl;
-    for (size_t i = 0; i < cloud->points.size (); ++i)
-        std::cout << "    " << cloud->points[i].x << " "
-                        << cloud->points[i].y << " "
-                        << cloud->points[i].z << std::endl;
-
-    // Create the filtering object
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud (cloud);
-    pass.setFilterFieldName ("z");
-    pass.setFilterLimits (0.0, 800.0);
-//    pass.setFilterLimitsNegative (true);
-    pass.filter (*cloud_filtered);
-
-    std::cout << "Cloud after filtering: " << std::endl;
-    for (size_t i = 0; i < cloud_filtered->points.size (); ++i)
-    std::cout << "    " << cloud_filtered->points[i].x << " "
-                        << cloud_filtered->points[i].y << " "
-                        << cloud_filtered->points[i].z << std::endl;
-
     return 0;
 }
