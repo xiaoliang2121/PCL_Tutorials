@@ -32,8 +32,8 @@ viewerPsycho (pcl::visualization::PCLVisualizer& viewer)
 int
 main ()
 {
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr
-            cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr
+            cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::io::loadPCDFile ("../data/maize.pcd", *cloud);
     pcl::visualization::CloudViewer viewer("Cloud Viewer");
     //showCloud函数是同步的，在此处等待直到渲染显示为止
