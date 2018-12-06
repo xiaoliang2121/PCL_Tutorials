@@ -48,7 +48,8 @@ int main (int argc, char** argv)
         pcl::ConditionalRemoval<pcl::PointXYZ> condrem;
         condrem.setCondition (range_cond);
         condrem.setInputCloud (cloud);
-        condrem.setKeepOrganized(true);
+        condrem.setKeepOrganized(false);
+        condrem.setUserFilterValue(0.0f);
         // apply filter
         condrem.filter (*cloud_filtered);
     }
