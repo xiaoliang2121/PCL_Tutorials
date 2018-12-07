@@ -1,43 +1,37 @@
 ﻿#include <iostream>
 #include <pcl/point_types.h>
-#include <pcl/filters/passthrough.h>
+#include <pcl/features/normal_3d_omp.h>
+#include <pcl/features/integral_image_normal.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/visualization/pcl_visualizer.h>
 
 int main (int argc, char** argv)
 {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr
+            cloud (new pcl::PointCloud<pcl::PointXYZ>);
 
-    // Fill in the cloud data
-    cloud->width  = 5;
-    cloud->height = 1;
-    cloud->points.resize (cloud->width * cloud->height);
+    pcl::io::loadPCDFile("../data/table_scene_lms400.pcd",*cloud);
 
-    for (size_t i = 0; i < cloud->points.size (); ++i)
+    pcl::NormalEstimationOMP<pcl::PointXYZ,pcl::Normal> ne;
+    ne.setInputCloud(cloud);
+
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr
+            tree(new pcl::search::KdTree<pcl::PointXYZ>());
+    ne.setSearchMethod(tree);
+
+    pcl::PointCloud<pcl::Normal>::Ptr
+            cloud_normals(new pcl::PointCloud<pcl::Normal>);
+    ne.setRadiusSearch(0.03);
+    ne.compute(*cloud_normals);
+
+    pcl::visualization::PCLVisualizer viewer("PCL Viewer");
+    viewer.setBackgroundColor(0.0,0.0,0.0);
+    viewer.addPointCloudNormals<pcl::PointXYZ,pcl::Normal>(cloud,cloud_normals);
+
+    while(!viewer.wasStopped())
     {
-        cloud->points[i].x = 1024 * rand () / (RAND_MAX + 1.0f);
-        cloud->points[i].y = 1024 * rand () / (RAND_MAX + 1.0f);
-        cloud->points[i].z = 1024 * rand () / (RAND_MAX + 1.0f);
+        viewer.spinOnce();
     }
-
-    std::cout << "Cloud before filtering: " << std::endl;
-    for (size_t i = 0; i < cloud->points.size (); ++i)
-        std::cout << "    " << cloud->points[i].x << " "
-                        << cloud->points[i].y << " "
-                        << cloud->points[i].z << std::endl;
-
-    // Create the filtering object
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud (cloud);
-    pass.setFilterFieldName ("z");
-    pass.setFilterLimits (0.0, 800.0);
-//    pass.setFilterLimitsNegative (true);
-    pass.filter (*cloud_filtered);
-
-    std::cout << "Cloud after filtering: " << std::endl;
-    for (size_t i = 0; i < cloud_filtered->points.size (); ++i)
-    std::cout << "    " << cloud_filtered->points[i].x << " "
-                        << cloud_filtered->points[i].y << " "
-                        << cloud_filtered->points[i].z << std::endl;
 
     return 0;
 }
