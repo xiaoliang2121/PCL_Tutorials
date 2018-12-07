@@ -7,3 +7,6 @@
 7-Range_Image
 8-KeyPoints
 9-sample_consensus
+10-registration
+11-segmentation
+12-surface
