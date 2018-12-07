@@ -1,6 +1,7 @@
 ﻿#include <iostream>
 #include <pcl/point_types.h>
 #include <pcl/features/fpfh.h>
+#include <pcl/features/vfh.h>
 #include <pcl/features/integral_image_normal.h>
 #include <pcl/io/pcd_io.h>
 
@@ -20,10 +21,10 @@ int main (int argc, char** argv)
     ne.setInputCloud(cloud);
     ne.compute(*normals);
 
-    // Create the FPFH estimation class, and pass the input dataset+normals to it
-    pcl::FPFHEstimation<pcl::PointXYZ, pcl::Normal, pcl::FPFHSignature33> fpfh;
-    fpfh.setInputCloud (cloud);
-    fpfh.setInputNormals (normals);
+    // Create the VFH estimation class, and pass the input dataset+normals to it
+    pcl::VFHEstimation<pcl::PointXYZ, pcl::Normal, pcl::VFHSignature308> vfh;
+    vfh.setInputCloud (cloud);
+    vfh.setInputNormals (normals);
     // alternatively, if cloud is of tpe PointNormal, do fpfh.setInputNormals (cloud);
 
     // Create an empty kdtree representation, and pass it to the FPFH estimation object.
@@ -31,21 +32,17 @@ int main (int argc, char** argv)
     pcl::search::KdTree<pcl::PointXYZ>::Ptr
             tree(new pcl::search::KdTree<pcl::PointXYZ>);
 
-    fpfh.setSearchMethod (tree);
+    vfh.setSearchMethod (tree);
 
     // Output datasets
-    pcl::PointCloud<pcl::FPFHSignature33>::Ptr
-            fpfhs(new pcl::PointCloud<pcl::FPFHSignature33>());
-
-    // Use all neighbors in a sphere of radius 5cm
-    // IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
-    fpfh.setRadiusSearch (0.05);
+    pcl::PointCloud<pcl::VFHSignature308>::Ptr
+            vfhs(new pcl::PointCloud<pcl::VFHSignature308>());
 
     // Compute the features
-    fpfh.compute (*fpfhs);
+    vfh.compute (*vfhs);
 
     // fpfhs->points.size () should have the same size as the input cloud->points.size ()*
-    std::cout<<"fpfhs Point size: "<<fpfhs->points.size()<<std::endl;
+    std::cout<<"fpfhs Point size: "<<vfhs->points.size()<<std::endl;
 
     return 0;
 }
