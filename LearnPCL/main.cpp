@@ -1,104 +1,48 @@
 ﻿#include <iostream>
-#include <pcl/console/parse.h>
-#include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
-#include <pcl/sample_consensus/ransac.h>
-#include <pcl/sample_consensus/sac_model_plane.h>
-#include <pcl/sample_consensus/sac_model_sphere.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <boost/thread/thread.hpp>
-
-boost::shared_ptr<pcl::visualization::PCLVisualizer>
-simpleVis (pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud)
-{
-  // --------------------------------------------
-  // -----Open 3D viewer and add point cloud-----
-  // --------------------------------------------
-  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
-  viewer->setBackgroundColor (0, 0, 0);
-  viewer->addPointCloud<pcl::PointXYZ> (cloud, "sample cloud");
-  viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloud");
-  //viewer->addCoordinateSystem (1.0, "global");
-  viewer->initCameraParameters ();
-  return (viewer);
-}
+#include <pcl/registration/icp.h>
 
 int
-main(int argc, char** argv)
+ main (int argc, char** argv)
 {
-  // initialize PointClouds
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr final (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out (new pcl::PointCloud<pcl::PointXYZ>);
 
-  // populate our PointCloud with points
-  cloud->width    = 5000;
-  cloud->height   = 1;
-  cloud->is_dense = false;
-  cloud->points.resize (cloud->width * cloud->height);
-  for (size_t i = 0; i < cloud->points.size (); ++i)
+  // Fill in the CloudIn data
+  cloud_in->width    = 5;
+  cloud_in->height   = 1;
+  cloud_in->is_dense = false;
+  cloud_in->points.resize (cloud_in->width * cloud_in->height);
+  for (size_t i = 0; i < cloud_in->points.size (); ++i)
   {
-    if (pcl::console::find_argument (argc, argv, "-s") >= 0 ||
-            pcl::console::find_argument (argc, argv, "-sf") >= 0)
-    {
-      cloud->points[i].x = 1024 * rand () / (RAND_MAX + 1.0);
-      cloud->points[i].y = 1024 * rand () / (RAND_MAX + 1.0);
-      if (i % 5 == 0)
-        cloud->points[i].z = 1024 * rand () / (RAND_MAX + 1.0);
-      else if(i % 2 == 0)
-        cloud->points[i].z =  sqrt( 1 - (cloud->points[i].x * cloud->points[i].x)
-                                      - (cloud->points[i].y * cloud->points[i].y));
-      else
-        cloud->points[i].z =  - sqrt( 1 - (cloud->points[i].x * cloud->points[i].x)
-                                        - (cloud->points[i].y * cloud->points[i].y));
-    }
-    else
-    {
-      cloud->points[i].x = 1024 * rand () / (RAND_MAX + 1.0);
-      cloud->points[i].y = 1024 * rand () / (RAND_MAX + 1.0);
-      if( i % 2 == 0)
-        cloud->points[i].z = 1024 * rand () / (RAND_MAX + 1.0);
-      else
-        cloud->points[i].z = -1 * (cloud->points[i].x + cloud->points[i].y);
-    }
+    cloud_in->points[i].x = 1024 * rand () / (RAND_MAX + 1.0f);
+    cloud_in->points[i].y = 1024 * rand () / (RAND_MAX + 1.0f);
+    cloud_in->points[i].z = 1024 * rand () / (RAND_MAX + 1.0f);
   }
+  std::cout << "Saved " << cloud_in->points.size () << " data points to input:"
+      << std::endl;
+  for (size_t i = 0; i < cloud_in->points.size (); ++i) std::cout << "    " <<
+      cloud_in->points[i].x << " " << cloud_in->points[i].y << " " <<
+      cloud_in->points[i].z << std::endl;
+  *cloud_out = *cloud_in;
+  std::cout << "size:" << cloud_out->points.size() << std::endl;
+  for (size_t i = 0; i < cloud_in->points.size (); ++i)
+    cloud_out->points[i].x = cloud_in->points[i].x + 0.7f;
+  std::cout << "Transformed " << cloud_in->points.size () << " data points:"
+      << std::endl;
+  for (size_t i = 0; i < cloud_out->points.size (); ++i)
+    std::cout << "    " << cloud_out->points[i].x << " " <<
+      cloud_out->points[i].y << " " << cloud_out->points[i].z << std::endl;
 
-  std::vector<int> inliers;
+  pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
+  icp.setInputSource(cloud_in);
+  icp.setInputTarget(cloud_out);
+  pcl::PointCloud<pcl::PointXYZ> Final;
+  icp.align(Final);
+  std::cout << "has converged:" << icp.hasConverged() << " score: " <<
+  icp.getFitnessScore() << std::endl;
+  std::cout << icp.getFinalTransformation() << std::endl;
 
-  // created RandomSampleConsensus object and compute the appropriated model
-  pcl::SampleConsensusModelSphere<pcl::PointXYZ>::Ptr
-    model_s(new pcl::SampleConsensusModelSphere<pcl::PointXYZ> (cloud));
-  pcl::SampleConsensusModelPlane<pcl::PointXYZ>::Ptr
-    model_p (new pcl::SampleConsensusModelPlane<pcl::PointXYZ> (cloud));
-  if(pcl::console::find_argument (argc, argv, "-f") >= 0)
-  {
-    pcl::RandomSampleConsensus<pcl::PointXYZ> ransac (model_p);
-    ransac.setDistanceThreshold (.01);
-    ransac.computeModel();
-    ransac.getInliers(inliers);
-  }
-  else if (pcl::console::find_argument (argc, argv, "-sf") >= 0 )
-  {
-    pcl::RandomSampleConsensus<pcl::PointXYZ> ransac (model_s);
-    ransac.setDistanceThreshold (.01);
-    ransac.computeModel();
-    ransac.getInliers(inliers);
-  }
-
-  // copies all inliers of the model computed to another PointCloud
-  pcl::copyPointCloud<pcl::PointXYZ>(*cloud, inliers, *final);
-
-  // creates the visualization object and adds either our original cloud or all of the inliers
-  // depending on the command line arguments specified.
-  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
-  if (pcl::console::find_argument (argc, argv, "-f") >= 0 || pcl::console::find_argument (argc, argv, "-sf") >= 0)
-    viewer = simpleVis(final);
-  else
-    viewer = simpleVis(cloud);
-  while (!viewer->wasStopped ())
-  {
-    viewer->spinOnce (100);
-    boost::this_thread::sleep (boost::posix_time::microseconds (100000));
-  }
-  return 0;
- }
+ return (0);
+}
